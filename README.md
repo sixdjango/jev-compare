@@ -345,6 +345,22 @@ pnpm test        # 单元测试（不访问网络）
 pnpm test:e2e    # 用 test/ 里的图片调用真实 API（读取 .env 中的 JEV_KEY）
 ```
 
+## 发布（维护者）
+
+推送版本 tag 会通过 GitHub Actions 自动发布到 npm（`.github/workflows/release.yml`），使用 npm trusted publishing，不需要保存任何 npm token，并自动附带 provenance 证明：
+
+```sh
+npm version patch          # 或 minor / major；预发布用 npm version prerelease --preid beta
+git push --follow-tags     # 推送 v* tag 触发发布
+```
+
+- tag 必须和 `package.json` 的版本一致，否则发布失败。
+- 带 `-` 的预发布版本（如 `v0.2.0-beta.1`）发布到 `next` 标签，不影响 `latest`。
+- 发布前会跑类型检查和单元测试；仓库设置了 `JEV_KEY` secret 时还会跑调用真实 API 的端到端测试。
+- 发布成功后自动创建 GitHub Release。
+
+每次推送到 `main` 和每个 PR 都会跑 CI（`.github/workflows/ci.yml`）：Node 22 / 24 下的类型检查、单元测试，以及 publint、arethetypeswrong 包检查。
+
 ## License
 
 MIT

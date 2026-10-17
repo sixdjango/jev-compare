@@ -1,0 +1,66 @@
+# Publishes to npm when a version tag (v1.2.3, or v1.2.3-beta.1 for a prerelease) is pushed.
+# Uses npm trusted publishing (OIDC): no npm token is stored, and npm attaches a provenance
+# attestation linking the package to this workflow run.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # Lets npm verify this workflow through OIDC.
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false # Never restore caches into a release build.
+
+      - name: Check the tag matches package.json
+        run: |
+          version="$(node -p 'require("./package.json").version')"
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $version"
+            exit 1
+          fi
+
+      - name: Ensure npm supports trusted publishing (11.5.1+)
+        run: |
+          npm --version
+          node -e 'const [a,b,c]=process.argv[1].split(".").map(Number); process.exit(a>11||(a===11&&(b>5||(b===5&&c>=1)))?0:1)' "$(npm --version)" \
+            || npm install -g npm@^11.5.1
+
+      - run: pnpm install --frozen-lockfile
+
+      # Calls the real API; runs only when the JEV_KEY repository secret is set.
+      - name: End-to-end tests
+        env:
+          JEV_KEY: ${{ secrets.JEV_KEY }}
+        run: |
+          if [ -n "$JEV_KEY" ]; then pnpm test:e2e; else echo "JEV_KEY secret not set; skipping."; fi
+
+      # prepack builds and prepublishOnly runs the type check and unit tests first.
+      # Prereleases (versions with a "-") go to the "next" dist-tag instead of "latest".
+      - name: Publish to npm
+        run: |
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then npm publish --tag next; else npm publish; fi
+
+  github-release:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Creates the GitHub release.
+    steps:
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          prerelease=""
+          [[ "$GITHUB_REF_NAME" == *-* ]] && prerelease="--prerelease"
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes $prerelease

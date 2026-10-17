@@ -79,5 +79,6 @@
     "rolldown": "^1.2.14",
     "rolldown-plugin-dts": "^0.28.8",
     "typescript": "^5.9.0"
-  }
+  },
+  "packageManager": "pnpm@10.6.3"
 }
