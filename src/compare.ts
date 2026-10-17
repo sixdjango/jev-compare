@@ -1,3 +1,4 @@
+import { proxyFetch, resolveProxy } from "./proxy.ts";
 import { BadRequestError, image, TypeSafeClient, withAssets } from "@typesafe-ai/sdk";
 import type {
   BoxResponse,
@@ -180,8 +181,14 @@ export interface CompareOptions {
   resize?: ResizeOptions | false;
   /** An existing client to use instead of creating one. It must send the image opt-in header. */
   client?: TypeSafeClient;
-  /** Options for the created client, such as `baseURL`, `timeout` or a proxy-aware `fetch`. */
+  /** Options for the created client, such as `baseURL`, `timeout` or a custom `fetch`. */
   clientOptions?: TypeSafeClientConfig;
+  /**
+   * HTTP proxy for API requests, such as `http://127.0.0.1:7890`, or `false` for none.
+   * Default: `HTTPS_PROXY`, then `HTTP_PROXY`; `NO_PROXY` is honored. Ignored when
+   * `client` or `clientOptions.fetch` is given.
+   */
+  proxy?: string | false;
   /**
    * Cache API answers: a directory for an on-disk cache, or any `CacheStore`, such as
    * `memoryCache()` or `fileCache({ dir, ttl })`. Requests are keyed by everything they send
@@ -205,10 +212,12 @@ const DIFFERENCES_PER_REQUEST = 4;
 const DUPLICATE_IOU = 0.6;
 
 /** Create a client configured for image comparison. */
-export function createClient(options: Pick<CompareOptions, "apiKey" | "clientOptions"> = {}): TypeSafeClient {
+export function createClient(options: Pick<CompareOptions, "apiKey" | "clientOptions" | "proxy"> = {}): TypeSafeClient {
   const apiKey = options.apiKey ?? options.clientOptions?.apiKey ?? env("JEV_KEY") ?? env("TYPESAFE_API_KEY");
+  const proxy = resolveProxy(options.proxy);
   return new TypeSafeClient({
     timeout: 60_000,
+    ...(proxy ? { fetch: proxyFetch(proxy) } : {}),
     ...options.clientOptions,
     apiKey,
     defaultHeaders: { ...IMAGE_HEADER, ...options.clientOptions?.defaultHeaders },

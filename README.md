@@ -128,6 +128,7 @@ An image can be a file path, a `data:` URL, `{ base64 }`, a `Uint8Array` / `Buff
 | `context` | – | Extra context for the model |
 | `client` | – | An existing `TypeSafeClient` to reuse (it must send the image opt-in header; create it with `createClient()`) |
 | `clientOptions` | – | Options for the created `TypeSafeClient`, such as `baseURL`, `timeout` or a custom `fetch` |
+| `proxy` | `HTTPS_PROXY` / `HTTP_PROXY` | HTTP proxy URL, or `false` for none; honors `NO_PROXY`. See [Proxies](#proxies) |
 | `signal` | – | An `AbortSignal` to cancel |
 
 ## Command line
@@ -295,21 +296,22 @@ Decoding and encoding are pure JavaScript ([fast-png](https://github.com/image-j
 
 ## Proxies
 
-TypeSafe isn't available in some regions (HTTP 451). Node.js's built-in `fetch` ignores `HTTPS_PROXY` by default; on Node.js 24+, set `NODE_USE_ENV_PROXY=1`:
-
-```sh
-NODE_USE_ENV_PROXY=1 node app.js
-```
-
-When loading configuration with `node --env-file=.env`, `NODE_USE_ENV_PROXY` in the env file has no effect (it is read too early); use `NODE_OPTIONS` instead:
+TypeSafe isn't available in some regions (HTTP 451). jev-compare reads `HTTPS_PROXY` / `HTTP_PROXY` (either case) itself and honors `NO_PROXY`; `NODE_USE_ENV_PROXY` and `--use-env-proxy` aren't needed:
 
 ```sh
 # .env
 HTTPS_PROXY=http://127.0.0.1:7890
-NODE_OPTIONS=--use-env-proxy
+NO_PROXY=localhost,127.0.0.1
 ```
 
-Or pass a proxy-aware `fetch` in `clientOptions.fetch`.
+Or set it in code, or turn it off with `false`:
+
+```js
+await compareImages(a, b, { proxy: "http://127.0.0.1:7890" });
+await compareImages(a, b, { proxy: false });
+```
+
+On the command line, use `--proxy <url>`, or `--proxy none` to turn it off. The option is ignored when `client` or `clientOptions.fetch` is given.
 
 ## How it works
 

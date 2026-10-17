@@ -2,6 +2,7 @@ export { combineScore, compareImages, createClient, extentScore, iou, toPixels }
 export type { CompareOptions, CompareResult, Difference, ImageSummary, ScoreBreakdown, Issue, NormalizedBox, PixelBox } from "./compare.ts";
 export { API_MAX_DIMENSION, prepareImage, targetSize } from "./resize.ts";
 export type { PreparedImage, ResizeOptions } from "./resize.ts";
+export { proxyFetch, resolveProxy } from "./proxy.ts";
 export { annotateDifferences } from "./annotate.ts";
 export type { AnnotateOptions } from "./annotate.ts";
 export { fileCache, memoryCache } from "./cache.ts";

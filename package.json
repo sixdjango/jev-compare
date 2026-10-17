@@ -1,6 +1,6 @@
 {
   "name": "jev-compare",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "AI visual image comparison for UI review: a 1–10 similarity score, located differences with bounding boxes, and fix suggestions. Built on the TypeSafe AI (Jev) SDK.",
   "keywords": [
     "image",
@@ -64,13 +64,14 @@
   "scripts": {
     "build": "rolldown -c",
     "typecheck": "tsc --noEmit",
-    "test": "npm run build && node --test test/unit.test.mjs test/resize.test.mjs test/report.test.mjs test/cache.test.mjs test/prune.test.mjs",
+    "test": "npm run build && node --test test/unit.test.mjs test/resize.test.mjs test/report.test.mjs test/cache.test.mjs test/prune.test.mjs test/proxy.test.mjs",
     "test:e2e": "npm run build && node --env-file-if-exists=.env --test test/e2e.test.mjs",
     "prepublishOnly": "npm run typecheck && npm test",
     "prepack": "npm run build"
   },
   "dependencies": {
-    "@typesafe-ai/sdk": "^0.7.0"
+    "@typesafe-ai/sdk": "^0.7.0",
+    "undici": "^7.30.1"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

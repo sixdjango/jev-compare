@@ -3,7 +3,7 @@ import { defineConfig } from "rolldown";
 import type { Plugin } from "rolldown";
 import { dts } from "rolldown-plugin-dts";
 
-const external = [/^node:/, "@typesafe-ai/sdk"];
+const external = [/^node:/, "@typesafe-ai/sdk", "undici"];
 const { version } = JSON.parse(await readFile("package.json", "utf8"));
 const define = { __VERSION__: JSON.stringify(version) };
 

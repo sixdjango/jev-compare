@@ -36,10 +36,11 @@ Options:
   --no-resize            Send the original images (the API rejects sides over 1568 px)
   --context <text>       Extra context for the model
   --model <name>         Model name (default: jev-preview)
+  --proxy <url|none>     HTTP proxy (default: HTTPS_PROXY / HTTP_PROXY; "none" disables)
   -h, --help             Show this help
 
 The API key is read from JEV_KEY or TYPESAFE_API_KEY.
-Behind an HTTP proxy, run with NODE_USE_ENV_PROXY=1 (Node.js 24+).`;
+HTTPS_PROXY / HTTP_PROXY are used automatically, honoring NO_PROXY.`;
 
 async function main(): Promise<void> {
   const { values, positionals } = parseArgs({
@@ -70,6 +71,7 @@ async function main(): Promise<void> {
       "max-pixels": { type: "string" },
       "no-resize": { type: "boolean" },
       model: { type: "string" },
+      proxy: { type: "string" },
       help: { type: "boolean", short: "h" },
     },
   });
@@ -122,6 +124,7 @@ async function main(): Promise<void> {
         },
     context: values.context,
     model: values.model,
+    proxy: values.proxy === undefined ? undefined : values.proxy === "none" ? false : values.proxy,
     cache: values.cache === undefined ? undefined : fileCache({ dir: values.cache, ...cacheLimits }),
     report:
       values.report === undefined

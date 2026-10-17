@@ -128,6 +128,7 @@ await writeFile("diff.svg", await annotateDifferences("screenshot.png", result))
 | `context` | – | 给模型的额外说明 |
 | `client` | – | 复用已有的 `TypeSafeClient`（需带图片 opt-in header，推荐用 `createClient()` 创建） |
 | `clientOptions` | – | 传给 `TypeSafeClient` 的配置，如 `baseURL`、`timeout`、自定义 `fetch` |
+| `proxy` | `HTTPS_PROXY` / `HTTP_PROXY` | HTTP 代理地址，`false` 关闭；遵守 `NO_PROXY`，见[代理](#代理) |
 | `signal` | – | `AbortSignal`，用于取消 |
 
 ## 命令行
@@ -294,21 +295,22 @@ UI 截图这类大块元素的差异，用较小的 `maxPixels` 通常就够了�
 
 ## 代理
 
-TypeSafe 在部分地区不可用（HTTP 451）。Node.js 自带的 `fetch` 默认不走 `HTTPS_PROXY`，在 Node.js 24+ 上设置 `NODE_USE_ENV_PROXY=1` 即可：
-
-```sh
-NODE_USE_ENV_PROXY=1 node app.js
-```
-
-如果用 `node --env-file=.env` 加载配置，`NODE_USE_ENV_PROXY` 写在 env 文件里不会生效（读取时机太早），改用 `NODE_OPTIONS`：
+TypeSafe 在部分地区不可用（HTTP 451）。jev-compare 会自己读取 `HTTPS_PROXY` / `HTTP_PROXY`（大小写均可）并遵守 `NO_PROXY`，不需要 `NODE_USE_ENV_PROXY` 或 `--use-env-proxy`：
 
 ```sh
 # .env
 HTTPS_PROXY=http://127.0.0.1:7890
-NODE_OPTIONS=--use-env-proxy
+NO_PROXY=localhost,127.0.0.1
 ```
 
-或者通过 `clientOptions.fetch` 传入一个支持代理的 `fetch`。
+也可以在代码里指定，或用 `false` 关闭：
+
+```js
+await compareImages(a, b, { proxy: "http://127.0.0.1:7890" });
+await compareImages(a, b, { proxy: false });
+```
+
+命令行用 `--proxy <url>`，`--proxy none` 关闭。传入 `client` 或 `clientOptions.fetch` 时不使用该选项。
 
 ## 原理
 
