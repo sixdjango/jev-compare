@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -47,3 +48,37 @@ jobs:
       - run: npx -y publint@0.3
       - run: npx -y @arethetypeswrong/cli@0.18 --pack .
       - run: npm pack --dry-run
+
+  e2e:
+    name: End-to-end (real API)
+    # Secrets aren't available to pull requests from forks, so only run on main and manually.
+    if: github.event_name != 'pull_request'
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for the JEV_KEY secret
+        id: key
+        env:
+          JEV_KEY: ${{ secrets.JEV_KEY }}
+        run: |
+          if [ -n "$JEV_KEY" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::JEV_KEY secret not set; skipping end-to-end tests."
+          fi
+      - if: steps.key.outputs.present == 'true'
+        uses: actions/checkout@v7
+      - if: steps.key.outputs.present == 'true'
+        uses: pnpm/action-setup@v6
+      - if: steps.key.outputs.present == 'true'
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - if: steps.key.outputs.present == 'true'
+        run: pnpm install --frozen-lockfile
+      - name: End-to-end tests
+        if: steps.key.outputs.present == 'true'
+        env:
+          JEV_KEY: ${{ secrets.JEV_KEY }}
+        run: pnpm test:e2e

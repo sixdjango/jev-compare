@@ -361,10 +361,10 @@ git push --follow-tags     # 推送 v* tag 触发发布
 
 - tag 必须和 `package.json` 的版本一致，否则发布失败。
 - 带 `-` 的预发布版本（如 `v0.2.0-beta.1`）发布到 `next` 标签，不影响 `latest`。
-- 发布前会跑类型检查和单元测试；仓库设置了 `JEV_KEY` secret 时还会跑调用真实 API 的端到端测试。
+- 发布前会跑类型检查和单元测试；仓库设置了 `JEV_KEY` secret 时还会跑调用真实 API 的端到端测试（没设置时该步骤显示为 skipped）。
 - 发布成功后自动创建 GitHub Release。
 
-每次推送到 `main` 和每个 PR 都会跑 CI（`.github/workflows/ci.yml`）：Node 22 / 24 下的类型检查、单元测试，以及 publint、arethetypeswrong 包检查。
+每次推送到 `main` 和每个 PR 都会跑 CI（`.github/workflows/ci.yml`）：Node 22 / 24 下的类型检查、单元测试，以及 publint、arethetypeswrong 包检查。推送到 `main` 或在 Actions 页面手动运行时，还会用 `JEV_KEY` secret 跑调用真实 API 的端到端测试（PR 不跑，因为 fork 的 PR 拿不到 secret）。
 
 ## License
 

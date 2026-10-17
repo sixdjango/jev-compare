@@ -39,11 +39,21 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       # Calls the real API; runs only when the JEV_KEY repository secret is set.
-      - name: End-to-end tests
+      - name: Check for the JEV_KEY secret
+        id: key
         env:
           JEV_KEY: ${{ secrets.JEV_KEY }}
         run: |
-          if [ -n "$JEV_KEY" ]; then pnpm test:e2e; else echo "JEV_KEY secret not set; skipping."; fi
+          if [ -n "$JEV_KEY" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::JEV_KEY secret not set; skipping end-to-end tests."
+          fi
+      - name: End-to-end tests
+        if: steps.key.outputs.present == 'true'
+        env:
+          JEV_KEY: ${{ secrets.JEV_KEY }}
+        run: pnpm test:e2e
 
       # prepack builds and prepublishOnly runs the type check and unit tests first.
       # Prereleases (versions with a "-") go to the "next" dist-tag instead of "latest".
