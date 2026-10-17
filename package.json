@@ -1,0 +1,83 @@
+{
+  "name": "jev-compare",
+  "version": "0.1.0",
+  "description": "AI visual image comparison for UI review: a 1–10 similarity score, located differences with bounding boxes, and fix suggestions. Built on the TypeSafe AI (Jev) SDK.",
+  "keywords": [
+    "image",
+    "image-comparison",
+    "image-diff",
+    "visual-regression",
+    "visual-testing",
+    "screenshot",
+    "ui-review",
+    "design-qa",
+    "similarity",
+    "bounding-box",
+    "ai",
+    "typesafe",
+    "jev"
+  ],
+  "author": "Django",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sixdjango/jev-compare.git"
+  },
+  "homepage": "https://github.com/sixdjango/jev-compare#readme",
+  "bugs": {
+    "url": "https://github.com/sixdjango/jev-compare/issues"
+  },
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.cts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "jev-compare": "dist/cli.mjs"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "THIRD_PARTY_LICENSES"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "scripts": {
+    "build": "rolldown -c",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && node --test test/unit.test.mjs test/resize.test.mjs test/report.test.mjs test/cache.test.mjs test/prune.test.mjs",
+    "test:e2e": "npm run build && node --env-file-if-exists=.env --test test/e2e.test.mjs",
+    "prepublishOnly": "npm run typecheck && npm test",
+    "prepack": "npm run build"
+  },
+  "dependencies": {
+    "@typesafe-ai/sdk": "^0.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "fast-png": "^8.0.0",
+    "jpeg-js": "^0.4.4",
+    "rolldown": "^1.2.14",
+    "rolldown-plugin-dts": "^0.28.8",
+    "typescript": "^5.9.0"
+  }
+}
