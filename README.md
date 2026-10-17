@@ -1,6 +1,7 @@
 # jev-compare
 
 [![npm](https://img.shields.io/npm/v/jev-compare)](https://www.npmjs.com/package/jev-compare)
+[![downloads](https://img.shields.io/npm/dm/jev-compare)](https://www.npmjs.com/package/jev-compare)
 [![CI](https://github.com/sixdjango/jev-compare/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/sixdjango/jev-compare/actions/workflows/ci.yml)
 [![node](https://img.shields.io/node/v/jev-compare)](https://nodejs.org/)
 [![license](https://img.shields.io/npm/l/jev-compare)](./LICENSE)
