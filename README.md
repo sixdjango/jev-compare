@@ -1,5 +1,10 @@
 # jev-compare
 
+[![npm](https://img.shields.io/npm/v/jev-compare)](https://www.npmjs.com/package/jev-compare)
+[![CI](https://github.com/sixdjango/jev-compare/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/sixdjango/jev-compare/actions/workflows/ci.yml)
+[![node](https://img.shields.io/node/v/jev-compare)](https://nodejs.org/)
+[![license](https://img.shields.io/npm/l/jev-compare)](./LICENSE)
+
 基于 [TypeSafe AI](https://docs.typesafe.ai/sdk/javascript)（Jev 模型）的图片相似度对比库：
 
 - **1–10 分**相似度打分（10 = 完全一致）
