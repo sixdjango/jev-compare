@@ -1,161 +1,163 @@
 # jev-compare
 
+**English** | [简体中文](https://github.com/sixdjango/jev-compare/blob/main/README.zh-CN.md)
+
 [![npm](https://img.shields.io/npm/v/jev-compare)](https://www.npmjs.com/package/jev-compare)
 [![downloads](https://img.shields.io/npm/dm/jev-compare)](https://www.npmjs.com/package/jev-compare)
 [![CI](https://github.com/sixdjango/jev-compare/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/sixdjango/jev-compare/actions/workflows/ci.yml)
 [![node](https://img.shields.io/node/v/jev-compare)](https://nodejs.org/)
-[![license](https://img.shields.io/npm/l/jev-compare)](./LICENSE)
+[![license](https://img.shields.io/npm/l/jev-compare)](https://github.com/sixdjango/jev-compare/blob/main/LICENSE)
 
-基于 [TypeSafe AI](https://docs.typesafe.ai/sdk/javascript)（Jev 模型）的图片相似度对比库：
+AI image comparison built on [TypeSafe AI](https://docs.typesafe.ai/sdk/javascript) (the Jev model):
 
-- **1–10 分**相似度打分（10 = 完全一致）
-- 定位具体**不一致区域**，同时给出候选图和参考图中的 box（比例坐标 + 像素坐标）
-- 对每处差异给出**类型、元素和修改建议**（中文 / 英文）
-- 可选输出带标注框的 SVG
-- 大图自动压缩后再上传（API 不接受长边超过 1568px 的图片），框坐标仍按原图像素返回
-- 报告持久化：保存 JSON + 可离线查看的 HTML 报告，可列出历史报告，按时间 / 数量 / 大小自动清理旧报告
-- 缓存：相同输入不重复调用 API（内存 / 磁盘 / 自定义存储），磁盘缓存按过期时间 / 条目数 / 大小自动清理
+- A **1–10 similarity score** (10 = identical)
+- The **differing regions**, as boxes in both the candidate and the reference image (fractional and pixel coordinates)
+- For each difference, its **type, the affected element, and a fix suggestion** (English or Chinese)
+- An optional SVG with the differences outlined
+- Large images are downscaled before upload (the API rejects images over 1568px on a side); boxes still come back in the original image's pixels
+- Saved reports: JSON plus an offline HTML report, with listing and automatic cleanup by age, count or size
+- Caching: identical requests don't call the API again (in memory, on disk, or your own store), with automatic cleanup of the disk cache
 
-适合「设计稿 vs 实现截图」的 UI 走查、视觉回归测试等场景。
+Built for UI review of design mockups against implementation screenshots, visual regression tests, and similar checks.
 
-## 安装
+## Install
 
 ```sh
 npm install jev-compare
 ```
 
-需要 Node.js 22+。API Key 从 `JEV_KEY`（或 `TYPESAFE_API_KEY`）环境变量读取，也可以通过 `apiKey` 传入。开发本仓库时，把 `.env.example` 复制为 `.env` 并填入 Key。
+Requires Node.js 22+. The API key is read from the `JEV_KEY` (or `TYPESAFE_API_KEY`) environment variable, or passed as `apiKey`. To work on this repository, copy `.env.example` to `.env` and fill in the key.
 
-## 使用
+## Usage
 
 ```ts
 import { compareImages, annotateDifferences } from "jev-compare";
 import { writeFile } from "node:fs/promises";
 
 const result = await compareImages("design.png", "screenshot.png", {
-  locale: "zh",        // "zh" | "en"
-  maxDifferences: 4,   // 最多定位几处差异（0–8）
-  threshold: 0.5,      // 概率阈值
-  context: "移动端 App 页面，忽略状态栏",
+  locale: "en",        // "en" | "zh"; the default is "zh"
+  maxDifferences: 4,   // how many differences to locate (0–8)
+  threshold: 0.5,      // minimum probability to report
+  context: "A mobile app screen; ignore the status bar",
 });
 
-console.log(result.score);   // 7.9
-console.log(result.summary); // 相似度 7.9/10（高度相似），发现 2 处差异。
+console.log(result.score);   // 8.3
+console.log(result.summary); // Similarity 8.3/10 (highly similar); found 2 differences.
 for (const d of result.differences) {
   console.log(d.rank, d.typeLabel, d.elementLabel, d.boxPx, d.suggestion);
 }
 
-// 在候选图上画出差异框
+// Outline the differences on the candidate image
 await writeFile("diff.svg", await annotateDifferences("screenshot.png", result));
 ```
 
-图片可以是文件路径、`data:` URL、`{ base64 }`、`Uint8Array` / `Buffer` / `ArrayBuffer` 或 `Blob`，只支持 PNG 和 JPEG。
+An image can be a file path, a `data:` URL, `{ base64 }`, a `Uint8Array` / `Buffer` / `ArrayBuffer`, or a `Blob`. Only PNG and JPEG are supported.
 
-### 返回结果
+### Result
 
 ```jsonc
 {
-  "score": 8.2,                    // 1–10
+  "score": 8.3,                    // 1–10
   "scoreConfidence": 0.9,
-  "scoreBreakdown": { "holistic": 7.75, "extent": 8.65, "identicalProbability": 0.01 },
+  "scoreBreakdown": { "holistic": 7.78, "extent": 8.74, "identicalProbability": 0.01 },
   "identicalProbability": 0.01,
   "identical": false,
-  "summary": "相似度 7.9/10（高度相似），发现 2 处差异。",
+  "summary": "Similarity 8.3/10 (highly similar); found 2 differences.",
   "differences": [
     {
       "rank": 1,
-      "type": "content_missing",   // 见下方「差异类型」
-      "typeLabel": "内容缺失",
+      "type": "content_missing",   // see "Difference types" below
+      "typeLabel": "Missing content",
       "element": "button",         // text | button | container | icon | image | input | navigation | other
-      "elementLabel": "按钮",
-      "suggestion": "按钮还在，但其中的文字、图标等内容缺失，请补全按钮内的内容。",
-      "probability": 0.9,          // 该差异存在的概率
+      "elementLabel": "button",
+      "suggestion": "The button is there, but its text, icon or other content is missing; fill it in.",
+      "probability": 0.9,          // probability that this difference exists
       "typeConfidence": 0.97,
-      "box": { "top": 0.89, "bottom": 0.96, "left": 0.07, "right": 0.94 },  // 候选图，比例坐标
-      "boxPx": { "x": 26, "y": 723, "width": 327, "height": 57 },          // 候选图，像素坐标
+      "box": { "top": 0.89, "bottom": 0.96, "left": 0.07, "right": 0.94 },  // candidate, fractions
+      "boxPx": { "x": 26, "y": 723, "width": 323, "height": 57 },          // candidate, pixels
       "boxConfidence": 0.74,
-      "referenceBox": { /* 参考图中的对应区域 */ },
+      "referenceBox": { /* the same region in the reference */ },
       "referenceBoxPx": { /* ... */ }
     }
   ],
-  "issues": [                      // 全图层面检测到的差异类型（无位置）
-    { "type": "content_missing", "label": "内容缺失", "probability": 0.96, "suggestion": "..." }
+  "issues": [                      // kinds of difference found anywhere in the image (no location)
+    { "type": "content_missing", "label": "Missing content", "probability": 0.98, "suggestion": "..." }
   ],
   "images": {
-    // width/height 是原图尺寸（boxPx 基于它），sentWidth/sentHeight 是压缩后实际上传的尺寸
+    // width/height are the original size (boxPx refers to it); sentWidth/sentHeight are what was uploaded
     "reference": { "width": 375, "height": 812, "format": "png", "sentWidth": 375, "sentHeight": 812, "resized": false },
     "candidate": { /* ... */ }
   },
   "model": "jev-1.14.0",
   "usage": { "inputTokens": 13000, "outputTokens": 1300 },
-  "locale": "zh",
-  "requests": { "total": 4, "cached": 0 },   // 本次需要的 API 请求数，以及其中命中缓存的数量
-  "report": { "id": "20261017-081530-a1b2c3", "dir": "/abs/reports/20261017-081530-a1b2c3", "files": { /* ... */ } }  // 仅在传了 report 选项时
+  "locale": "en",
+  "requests": { "total": 4, "cached": 0 },   // API requests this comparison needed, and how many came from the cache
+  "report": { "id": "20261017-081530-a1b2c3", "dir": "/abs/reports/20261017-081530-a1b2c3", "files": { /* ... */ } }  // only with the report option
 }
 ```
 
-### 差异类型
+### Difference types
 
-| type | 含义 |
+| type | Meaning |
 | --- | --- |
-| `element_missing` | 整个元素缺失 |
-| `content_missing` | 元素还在，但里面的文字 / 图标等内容缺失 |
-| `background_missing` | 内容还在，但背景 / 卡片容器缺失 |
-| `element_extra` | 多出了参考图中没有的元素 |
-| `text_changed` | 文字内容不一致 |
-| `color_changed` | 颜色不一致 |
-| `moved` | 位置 / 对齐 / 间距不一致 |
-| `resized` | 尺寸不一致 |
-| `font_changed` | 字体 / 字号 / 字重不一致 |
-| `icon_changed` | 图标 / 图片不一致 |
-| `style_changed` | 边框 / 圆角 / 阴影不一致 |
+| `element_missing` | A whole element is missing |
+| `content_missing` | The element is there, but its text, icon or other content is missing |
+| `background_missing` | The content is there, but its background or card container is missing |
+| `element_extra` | An element that isn't in the reference |
+| `text_changed` | The text differs |
+| `color_changed` | A color differs |
+| `moved` | Position, alignment or spacing differs |
+| `resized` | Size differs |
+| `font_changed` | Font family, size or weight differs |
+| `icon_changed` | An icon or picture differs |
+| `style_changed` | Border, corner radius or shadow differs |
 
-### 选项
+### Options
 
-| 选项 | 默认值 | 说明 |
+| Option | Default | Description |
 | --- | --- | --- |
-| `apiKey` | `JEV_KEY` / `TYPESAFE_API_KEY` | TypeSafe API Key |
-| `model` | `jev-preview` | 定位 box 需要 `jev-preview` |
-| `locale` | `zh` | 标签、建议和摘要的语言 |
-| `maxDifferences` | `4` | 最多定位几处差异（0–8），每 4 处多发一个并行请求 |
-| `threshold` | `0.5` | 差异 / issue 的最低概率 |
-| `refine` | `true` | 对每处差异再看一次：更精确地分类，并把框扩到整个受影响的元素。每处差异多 1 个并行请求 |
-| `resize` | `{ maxDimension: 1568, maxPixels: 1150000 }` | 上传前的压缩设置，见下文「图片压缩」；`false` 表示发送原图 |
-| `cache` | – | 缓存 API 响应：目录字符串（磁盘缓存），或 `memoryCache()` / `fileCache()` / 自定义 `CacheStore`，见下文「缓存」 |
-| `report` | – | 对比后保存报告：目录字符串，或 `{ dir, format?, id?, images?, html?, meta?, retention? }`，见下文「报告持久化」 |
-| `context` | – | 给模型的额外说明 |
-| `client` | – | 复用已有的 `TypeSafeClient`（需带图片 opt-in header，推荐用 `createClient()` 创建） |
-| `clientOptions` | – | 传给 `TypeSafeClient` 的配置，如 `baseURL`、`timeout`、自定义 `fetch` |
-| `signal` | – | `AbortSignal`，用于取消 |
+| `apiKey` | `JEV_KEY` / `TYPESAFE_API_KEY` | TypeSafe API key |
+| `model` | `jev-preview` | Locating boxes needs `jev-preview` |
+| `locale` | `zh` | Language of labels, suggestions and the summary: `en` or `zh` |
+| `maxDifferences` | `4` | How many differences to locate (0–8); each 4 add one parallel request |
+| `threshold` | `0.5` | Minimum probability for a difference or issue |
+| `refine` | `true` | Look again at each difference to classify it precisely and widen its box to the whole affected element; one extra parallel request per difference |
+| `resize` | `{ maxDimension: 1568, maxPixels: 1150000 }` | How images are downscaled before upload, see [Image downscaling](#image-downscaling); `false` sends the originals |
+| `cache` | – | Cache API answers: a directory (disk cache), or `memoryCache()` / `fileCache()` / your own `CacheStore`, see [Caching](#caching) |
+| `report` | – | Save a report: a directory, or `{ dir, format?, id?, images?, html?, meta?, retention? }`, see [Reports](#reports) |
+| `context` | – | Extra context for the model |
+| `client` | – | An existing `TypeSafeClient` to reuse (it must send the image opt-in header; create it with `createClient()`) |
+| `clientOptions` | – | Options for the created `TypeSafeClient`, such as `baseURL`, `timeout` or a custom `fetch` |
+| `signal` | – | An `AbortSignal` to cancel |
 
-## 命令行
+## Command line
 
 ```sh
 JEV_KEY=xxx npx jev-compare design.png screenshot.png --svg diff.svg
 npx jev-compare design.png screenshot.png --json --locale en --max 6
-npx jev-compare design.png screenshot.png --no-refine   # 更快，但分类和框更粗
-npx jev-compare design@3x.png shot@3x.png --max-pixels 300000   # 大图压得更小，省 token
+npx jev-compare design.png screenshot.png --no-refine   # faster, coarser types and boxes
+npx jev-compare design@3x.png shot@3x.png --max-pixels 300000   # downscale large images further to save tokens
 npx jev-compare design.png screenshot.png --report reports --meta page=login --meta build=42
-npx jev-compare --list reports            # 列出历史报告（加 --json 输出 JSON）
-npx jev-compare a.png b.png --report reports --report-format json  # 只输出 report.json
-npx jev-compare a.png b.png --report reports --keep-count 100    # 保存后只保留最新 100 份
-npx jev-compare --prune reports --keep-days 30 --keep-mb 500 --dry-run   # 预览清理结果
-npx jev-compare design.png screenshot.png --cache .jev-cache   # 相同输入第二次直接读缓存
-npx jev-compare a.png b.png --cache .jev-cache --cache-days 30 --cache-mb 200  # 带自动清理的缓存
-npx jev-compare --prune-cache .jev-cache --cache-entries 1000                # 立即清理缓存
+npx jev-compare --list reports            # list saved reports (add --json for JSON)
+npx jev-compare a.png b.png --report reports --report-format json  # write only report.json
+npx jev-compare a.png b.png --report reports --keep-count 100    # keep only the newest 100 reports
+npx jev-compare --prune reports --keep-days 30 --keep-mb 500 --dry-run   # preview a cleanup
+npx jev-compare design.png screenshot.png --cache .jev-cache   # repeat runs are served from the cache
+npx jev-compare a.png b.png --cache .jev-cache --cache-days 30 --cache-mb 200  # a cache that cleans itself up
+npx jev-compare --prune-cache .jev-cache --cache-entries 1000                # clean up the cache now
 ```
 
-## 缓存
+## Caching
 
 ```ts
 import { compareImages, fileCache, memoryCache } from "jev-compare";
 
-await compareImages(a, b, { cache: ".jev-cache" });                       // 磁盘缓存
-await compareImages(a, b, { cache: fileCache({ dir: ".jev-cache", ttl: 7 * 864e5 }) }); // 7 天过期
-const cache = memoryCache({ maxEntries: 500 });                           // 进程内 LRU
+await compareImages(a, b, { cache: ".jev-cache" });                       // disk cache
+await compareImages(a, b, { cache: fileCache({ dir: ".jev-cache", ttl: 7 * 864e5 }) }); // expires after 7 days
+const cache = memoryCache({ maxEntries: 500 });                           // in-process LRU
 await compareImages(a, b, { cache });
 
-// 自定义存储（如 Redis）：实现 get / set 即可，值是普通 JSON
+// Your own store (such as Redis): implement get and set; values are plain JSON
 await compareImages(a, b, {
   cache: {
     get: async (key) => JSON.parse((await redis.get(`jev:${key}`)) ?? "null") ?? undefined,
@@ -164,85 +166,86 @@ await compareImages(a, b, {
 });
 ```
 
-缓存的是**每一次 API 请求**的响应，而不是整个对比结果。缓存键是请求实际发送内容的 sha256：模型、提示词、两张图（压缩后）的字节、问题列表。因此：
+The cache holds the answer to **each API request**, not the whole comparison. A request's key is the sha256 of everything it sends: the model, the prompt, both images' bytes (after downscaling), and the questions. So:
 
-| 改动 | 缓存命中 |
+| Change | Cache hits |
 | --- | --- |
-| 完全相同的输入 | 全部命中，0 token，约 50ms |
-| 只改 `locale` | 全部命中（语言只影响本地生成的文字） |
-| 改 `threshold` | 总览和定位请求命中；新超过阈值的差异只需补发精修请求 |
-| 改 `maxDifferences` | 定位请求重发；找到的差异不变时，精修请求仍命中 |
-| 改 `context` / `model` / `resize`、换图片、库升级改了提示词 | 不命中 |
+| Identical input | Every request; 0 tokens, about 50ms |
+| Only `locale` | Every request (the language only affects text generated locally) |
+| `threshold` | The overview and locating requests; only newly reported differences need a refine request |
+| `maxDifferences` | The locating request is re-sent; refine requests still hit when the same differences are found |
+| `context` / `model` / `resize`, a different image, or a library upgrade that changes the prompt | None |
 
-不需要手工维护「哪些选项影响结果」，也就不会因此返回过期结果。失败的请求不缓存；缓存读写出错（如 Redis 宕机）时自动退化为不缓存，不影响对比。
+There's no hand-maintained list of options that affect the result, so the cache can't serve a stale answer because one was missed. Failed requests aren't cached, and if the cache itself fails (say Redis is down), the comparison carries on without it.
 
-`fileCache` 每个条目一个 JSON 文件，原子写入，多进程可共享；`clear()` 清空。
+`fileCache` writes one JSON file per entry, atomically, and can be shared by several processes; `clear()` empties it.
 
-### 缓存自动清理
+### Cache cleanup
 
 ```ts
 const cache = fileCache({
   dir: ".jev-cache",
-  ttl: 30 * 864e5,          // 写入 30 天后过期
-  maxEntries: 5000,         // 最多 5000 条
-  maxBytes: 200 * 1024 ** 2, // 最多 200 MB
-  // autoPrune: true,        // 设置了任一上限时默认开启
-  // pruneInterval: 36e5,    // 两次自动清理至少间隔 1 小时
+  ttl: 30 * 864e5,           // expire 30 days after writing
+  maxEntries: 5000,          // at most 5000 entries
+  maxBytes: 200 * 1024 ** 2, // at most 200 MB
+  // autoPrune: true,        // on by default when any limit is set
+  // pruneInterval: 36e5,    // at least an hour between automatic cleanups
 });
-const stats = await cache.prune(); // 也可以手动立即清理
+const stats = await cache.prune(); // or clean up now
 // { expired, evicted, invalid, temp, freedBytes, keptEntries, keptBytes }
 ```
 
-- **过期**：按写入时间计算，过期条目读取时视为未命中，清理时删除。
-- **超出条目数 / 大小**：按**最近最少使用**淘汰。命中缓存时会更新文件时间，所以经常用到的条目会被保留；达到上限后，比它更久没用过的条目全部淘汰。
-- **自动清理**：在写入后触发，并通过目录里的 `.last-prune` 标记节流：同一个缓存目录无论有多少进程在用，每个 `pruneInterval` 内最多清理一次。这对每次都是新进程的 CLI 调用很重要，否则每跑一次就要扫描一遍缓存目录。清理失败不影响写入。
-- 上限是在清理时执行的，所以两次清理之间缓存可能暂时超出上限；需要严格上限时把 `pruneInterval` 设为 `0`（每次写入都清理，缓存很大时会变慢）。
-- 只处理缓存自己的文件（`xx/<sha256>.json`），目录里的其他文件不会被删；损坏的条目和崩溃遗留的临时文件会一并清理。
-- `memoryCache` 本身就有 `maxEntries`（LRU）和 `ttl`，不需要额外清理。
+- **Expiry** counts from when an entry was written. Expired entries are misses when read and are deleted when pruning.
+- **Over the entry or size limit**, the **least recently used** entries are evicted. A cache hit refreshes the entry's file time, so entries in regular use are kept; once a limit is reached, every entry used less recently goes too.
+- **Automatic cleanup** runs after writes and is throttled by a `.last-prune` marker in the directory: however many processes share the cache, it runs at most once per `pruneInterval`. That matters for the CLI, where every run is a new process and would otherwise scan the cache each time. A failed cleanup doesn't fail the write.
+- Limits are enforced when pruning, so the cache can briefly exceed them between cleanups. For a strict limit, set `pruneInterval` to `0` (prunes on every write, which is slower for large caches).
+- Only the cache's own files (`xx/<sha256>.json`) are touched; anything else in the directory is left alone. Corrupt entries and temp files left by crashes are cleaned up too.
+- `memoryCache` already has `maxEntries` (LRU) and `ttl` and needs no cleanup.
 
-> 模型输出本身有一定随机性，开启缓存后同一输入总是返回第一次的结果。想重新判定时换一个缓存目录或调用 `clear()`。
+> Model output varies a little between runs; with a cache, the same input always gets the first answer. To have the model judge again, use another cache directory or call `clear()`.
 
-## 报告持久化
+## Reports
 
 ```ts
 import { compareImages, listReports, loadReport, saveReport } from "jev-compare";
 
-// 对比时直接保存
+// Save while comparing
 const result = await compareImages("design.png", "screenshot.png", {
   report: { dir: "reports", meta: { page: "login", commit: "a1b2c3d" } },
 });
 console.log(result.report.files.html);
 
-// 或者事后保存已有结果
+// Or save an existing result later
 await saveReport(result, "design.png", "screenshot.png", { dir: "reports" });
 
-// 读取和列出
-const reports = await listReports("reports", { limit: 20 }); // 最新的在前
-const stored = await loadReport(reports[0].dir);              // 目录或 report.json 路径都可以
+// Read and list
+const reports = await listReports("reports", { limit: 20 }); // newest first
+const stored = await loadReport(reports[0].dir);              // a report directory or its report.json
 stored.result.differences;
 ```
 
-每个报告是一个独立目录：
+Each report is its own directory:
 
 ```
 reports/
   20261017-081530-a1b2c3/
-    report.json     # schemaVersion、id、createdAt、工具版本、两张图的路径/sha256/尺寸、meta、完整结果
-    report.html     # 单文件，图片内嵌，可离线打开或直接发给别人
-    reference.png   # 原图副本（images: false 可关闭）
+    report.json     # schemaVersion, id, createdAt, tool version, both images' paths/sha256/sizes, meta, full result
+    report.html     # one file with the images embedded; open it offline or send it to someone
+    reference.png   # copies of the images (turn off with images: false)
     candidate.png
 ```
 
-- **只输出 JSON**：`format: "json"`（CLI：`--report-format json`）只写 `report.json`，不生成 HTML、不复制图片，适合 CI 或交给其他程序处理。图片路径、sha256 和完整结果照常记录，`listReports` / 自动清理同样适用。默认 `format: "full"`；单独传 `html` / `images` 会覆盖 `format` 的默认值。
-- **ID**：默认是 UTC 时间戳 + 随机后缀，按名字排序就是按时间排序；也可以用 `id` 自己指定（只允许字母、数字、`.`、`_`、`-`），ID 已存在时会报错而不是覆盖。
-- **原子写入**：先写到隐藏的临时目录，写完再整体重命名，`listReports` 不会读到写了一半的报告；写入失败会清理临时目录。没有额外的索引文件，并发保存不会互相覆盖。
-- **HTML 报告**：左右并排显示参考图和候选图并标出差异框，悬停差异条目会同时高亮两张图里对应的框，支持深色模式和手机宽度。所有文本（包括 `meta`）都会转义。
-- **兼容性**：`report.json` 带 `schemaVersion`，`loadReport` 遇到更新版本的格式会报错，而不是返回读错的数据。
+- **JSON only**: `format: "json"` (CLI: `--report-format json`) writes only `report.json`, with no HTML and no image copies, for CI or other programs. The image paths, hashes and full result are still recorded, and `listReports` and cleanup work the same. The default is `format: "full"`; passing `html` or `images` overrides the format's default.
+- **IDs** default to a UTC timestamp plus a random suffix, so sorting by name sorts by time. Pass `id` to choose one (letters, digits, `.`, `_` and `-` only); an existing ID is an error, never overwritten.
+- **Atomic writes**: a report is written to a hidden temporary directory and renamed into place, so `listReports` never sees a half-written report, and a failed write cleans up after itself. There's no index file, so concurrent saves can't overwrite each other.
+- **The HTML report** shows the reference and candidate side by side with the differences outlined; hovering a difference highlights its box in both images. It supports dark mode and phone widths, and all text (including `meta`) is escaped.
+- **Compatibility**: `report.json` carries a `schemaVersion`, and `loadReport` rejects a newer format instead of misreading it.
 
-### 自动清理旧报告
+### Cleaning up old reports
 
 ```ts
-// 保存时自动清理：保留 30 天内、最多 100 份、总共不超过 500 MB；基准报告永不删除
+// Clean up on save: keep reports from the last 30 days, at most 100, at most 500 MB in total;
+// never delete baseline reports
 await compareImages(a, b, {
   report: {
     dir: "reports",
@@ -256,49 +259,49 @@ await compareImages(a, b, {
   },
 });
 
-// 或者单独清理（比如放在定时任务里）
+// Or clean up separately, for example from a scheduled job
 const { removed, freedBytes, kept } = await pruneReports("reports", { maxAge: 30 * 864e5, dryRun: true });
 ```
 
-- 三条规则可以组合，报告违反**任意一条**就会被删除，从最旧的开始删；返回结果里的 `reason` 说明是因为哪条规则（`maxAge` / `maxCount` / `maxBytes`）。
-- 刚保存的报告**一定不会被删**，但会计入数量和大小上限（即使 `maxCount: 0` 也会保留它）。
-- `keep` 返回 `true` 的报告不会被删，也**不计入**上限，适合保护基准报告。
-- 只删除能正确读出 `report.json` 的报告目录，目录里的其他文件和文件夹不会动。保存中途崩溃留下的临时目录超过 1 小时也会一并清掉。
-- `dryRun: true` 只计算将要删除的报告，不实际删除。
+- The limits combine: a report that breaks **any** of them is deleted, oldest first. Each removed report's `reason` says which limit applied (`maxAge` / `maxCount` / `maxBytes`).
+- The report just saved is **never** deleted, but it counts toward the count and size limits (even `maxCount: 0` keeps it).
+- Reports that `keep` returns `true` for are never deleted and **don't** count toward the limits, which suits baseline reports.
+- Only directories holding a readable `report.json` are deleted; other files and folders are left alone. Temporary directories left by a crashed save are removed once they're over an hour old.
+- `dryRun: true` works out what would be deleted without deleting anything.
 
-## 图片压缩
+## Image downscaling
 
-TypeSafe API 会拒绝长边超过 **1568px** 的图片（`400 Invalid image dimensions`），而且 token 用量大致和像素数成正比。所以上传前会按以下规则缩小图片：
+The TypeSafe API rejects images with a side over **1568px** (`400 Invalid image dimensions`), and token use grows with pixel count. So images are downscaled before upload:
 
-- 长边 ≤ `maxDimension`（默认 1568，也是上限）
-- 总像素 ≤ `maxPixels`（默认 1,150,000）
-- 保持宽高比；PNG 仍输出 PNG（不透明时去掉 alpha 通道），JPEG 仍输出 JPEG（`quality` 默认 90）
-- 已经满足条件的小图原样发送，不重新编码
+- Longest side ≤ `maxDimension` (default and maximum 1568)
+- Total pixels ≤ `maxPixels` (default 1,150,000)
+- The aspect ratio is kept; a PNG stays a PNG (dropping alpha when opaque) and a JPEG stays a JPEG (`quality` defaults to 90)
+- Images that already fit are sent as they are, without re-encoding
 
-缩放使用面积平均法，并对 alpha 预乘，细线和文字在缩小后依然清晰，透明边缘也不会发黑。差异框是比例坐标，`boxPx` 会换算回**原图**像素，所以调用方不用关心图片有没有被缩放。
+Downscaling averages over area with premultiplied alpha, so thin lines and text stay legible and transparent edges don't darken. Boxes are fractions, and `boxPx` is converted back to the **original** image's pixels, so callers needn't care whether an image was downscaled.
 
-实测（两张同尺寸截图，2 处差异）：
+Measured with two same-size screenshots and two differences:
 
-| 原图 | 上传尺寸 | 输入 token | 结果 |
+| Original | Uploaded as | Input tokens | Result |
 | --- | --- | --- | --- |
-| 375×812 | 原样 | ~13k | 正确 |
-| 1500×3248 / 2250×4872 | 724×1568（默认） | ~30k | 正确 |
-| 2250×4872，`maxPixels: 300000` | 372×805 | ~13k | 正确 |
-| 750×1624，`resize: false` | 原样 | – | API 拒绝 |
+| 375×812 | As is | ~13k | Correct |
+| 1500×3248 / 2250×4872 | 724×1568 (default) | ~30k | Correct |
+| 2250×4872, `maxPixels: 300000` | 372×805 | ~13k | Correct |
+| 750×1624, `resize: false` | As is | – | Rejected by the API |
 
-UI 截图这类大块元素的差异，用较小的 `maxPixels` 通常就够了；要检查字重、1px 边框这类细节，再用默认值。
+For differences in large UI elements, a smaller `maxPixels` is usually enough; keep the default for details like font weight or 1px borders.
 
-解码和编码用的是纯 JS 实现（[fast-png](https://github.com/image-js/fast-png)、[jpeg-js](https://github.com/jpeg-js/jpeg-js)），已打包进 dist，不依赖 sharp 之类的原生模块，许可见 `THIRD_PARTY_LICENSES`。2250×4872 的 PNG 缩放约需 0.6 秒。
+Decoding and encoding are pure JavaScript ([fast-png](https://github.com/image-js/fast-png), [jpeg-js](https://github.com/jpeg-js/jpeg-js)), bundled into `dist` with no native modules such as sharp; see `THIRD_PARTY_LICENSES`. Downscaling a 2250×4872 PNG takes about 0.6 seconds.
 
-## 代理
+## Proxies
 
-TypeSafe 在部分地区不可用（HTTP 451）。Node.js 自带的 `fetch` 默认不走 `HTTPS_PROXY`，在 Node.js 24+ 上设置 `NODE_USE_ENV_PROXY=1` 即可：
+TypeSafe isn't available in some regions (HTTP 451). Node.js's built-in `fetch` ignores `HTTPS_PROXY` by default; on Node.js 24+, set `NODE_USE_ENV_PROXY=1`:
 
 ```sh
 NODE_USE_ENV_PROXY=1 node app.js
 ```
 
-如果用 `node --env-file=.env` 加载配置，`NODE_USE_ENV_PROXY` 写在 env 文件里不会生效（读取时机太早），改用 `NODE_OPTIONS`：
+When loading configuration with `node --env-file=.env`, `NODE_USE_ENV_PROXY` in the env file has no effect (it is read too early); use `NODE_OPTIONS` instead:
 
 ```sh
 # .env
@@ -306,66 +309,66 @@ HTTPS_PROXY=http://127.0.0.1:7890
 NODE_OPTIONS=--use-env-proxy
 ```
 
-或者通过 `clientOptions.fetch` 传入一个支持代理的 `fetch`。
+Or pass a proxy-aware `fetch` in `clientOptions.fetch`.
 
-## 原理
+## How it works
 
-TypeSafe API 只回答结构化的问题（是/否、选择、打分、定位框），不生成自由文本，所以修改建议由「差异类型 × 元素类型」的模板生成。一次对比分两轮：
+The TypeSafe API only answers structured questions (yes/no, choice, score, box) and doesn't generate free text, so fix suggestions come from templates for each difference type and element type. A comparison runs in two rounds:
 
-1. **第一轮**（并行）
-   - **总览**：给出相似度（见下文「评分」）；另外每种差异类型各问一道 `noul` 题，结果放在 `issues` 里。
-   - **定位**：依次询问「第 1 / 第 2 / … 显著的差异（且与前面的位置不同）」，每处差异问：是否存在、差异类型、元素类型，以及在两张图中的位置。每 4 处差异一个请求；超出 token 上限时自动对半拆分重试。
-2. **精修**（`refine`，每处差异一个请求，并行）：把第一轮找到的位置写进问题里，让模型盯着那块区域重新分类，并框出整个受影响的元素。第一轮常把「按钮文字没了」判成「按钮缺失」、只框到卡片里的一行字，精修后能区分 `content_missing` / `background_missing` 并框住整张卡片。扩大后的框如果不再覆盖原位置、吞掉了别的差异，或面积过大（> 25%），就退回第一轮的框。
+1. **First round** (in parallel)
+   - **Overview**: the similarity score (see [Scoring](#scoring)), plus a yes/no question for each difference type, reported as `issues`.
+   - **Locating**: asks in turn for the most significant difference, the second most significant (somewhere else), and so on; for each, whether it exists, its type, the element type, and where it is in both images. Each 4 differences make one request, and a request over the token limit is split in half and retried.
+2. **Refine** (`refine`, one request per difference, in parallel): the region found in the first round is written into the questions so the model looks closely at it, reclassifies it, and boxes the whole affected element. The first round often reads "the button lost its label" as "the button is missing", or boxes one line of text in a card; refining tells `content_missing` from `background_missing` and boxes the whole card. A widened box that no longer covers the original region, swallows another difference, or covers over 25% of the image falls back to the first round's box.
 
-框高度重叠（IoU ≥ 0.6）的差异会去重。
+Differences whose boxes mostly overlap (IoU ≥ 0.6) are merged.
 
-### 评分
+### Scoring
 
-`score` 由两个独立的模型判断合成，明细在 `scoreBreakdown` 里：
+`score` combines two independent judgments by the model; `scoreBreakdown` has both:
 
-- **整体（holistic）**：10 档 rubric，每档都带具体例子（如「8 - 单个组件里有一处明显差异，比如缺了标签、背景或一段文字」「9 - 某处有小差异，比如按钮换色、小图标、轻微偏移」）。
-- **差异面积（extent）**：模型估计差异占画面的比例（无 / <1% / 1–5% / 5–15% / 15–40% / >40%），映射为 10 / 9.6 / 9 / 8 / 6 / 1 分，中间按比例插值。
+- **Holistic**: a 10-step rubric with a concrete example at each step (for example "8 - one clear difference in a single component, such as a missing label, background or block of text" and "9 - a small difference in one place, such as a recolored button, a small icon or a slight shift").
+- **Extent**: the model's estimate of how much of the image differs (none / <1% / 1–5% / 5–15% / 15–40% / >40%), mapped to 10 / 9.6 / 9 / 8 / 6 / 1 and interpolated between.
 
-`score = 两者平均`，再按「完全一致」的概率向 10 分拉近（所以相同的图稳定得 10 分）。两者互补：整体判断能区分「布局相同但颜色全变」和「完全无关」，面积判断让局部小差异不会被扣得和大面积差异一样多。
+`score` is their mean, pulled toward 10 by the probability that the images are identical (so identical images reliably score 10). Each covers the other's blind spot: the holistic judgment tells "same layout, every color changed" apart from "unrelated", and extent keeps a small local difference from costing as much as a large one.
 
-实测（每张跑 2 次，波动 ≤ 0.1）：
+Measured (each image run twice; scores varied by ≤ 0.1):
 
-| 候选图（与原图对比） | 旧算法 | 新算法 |
+| Candidate, compared with the original | Previous algorithm | Current |
 | --- | --- | --- |
-| 完全相同 / 像素相同但重新编码 | 10 | 10 |
-| 整体下移 2px | 9.1 | 9.5 |
-| 按钮换色 | 8.5 | 9.0 |
-| 一个 4×4px 的小点 | 8.5 | 8.9 |
-| 卡片背景缺失（test_img2） | 8.7 | 8.9 |
-| 按钮文字 + 卡片背景缺失（test_img1） | 7.9 | 8.2 |
-| 一整段文字缺失（test_img3） | 7.8 | 7.9 |
-| 颜色全部反转 | 6.4 | 3.5 |
-| 纯灰色图 | 1.1 | 1.3 |
+| Identical / same pixels, re-encoded | 10 | 10 |
+| Shifted down 2px | 9.1 | 9.5 |
+| One button recolored | 8.5 | 9.0 |
+| One 4×4px dot | 8.5 | 8.9 |
+| Card background missing (test_img2) | 8.7 | 8.9 |
+| Button label and card background missing (test_img1) | 7.9 | 8.2 |
+| A whole paragraph missing (test_img3) | 7.8 | 7.9 |
+| All colors inverted | 6.4 | 3.5 |
+| Solid gray | 1.1 | 1.3 |
 
-## 开发
+## Development
 
 ```sh
 pnpm install
-pnpm build       # Rolldown 打包 ESM + CJS + d.ts
-pnpm test        # 单元测试（不访问网络）
-pnpm test:e2e    # 用 test/ 里的图片调用真实 API（读取 .env 中的 JEV_KEY）
+pnpm build       # bundle ESM + CJS + d.ts with Rolldown
+pnpm test        # unit tests (no network)
+pnpm test:e2e    # call the real API with the images in test/ (reads JEV_KEY from .env)
 ```
 
-## 发布（维护者）
+## Releasing (maintainers)
 
-推送版本 tag 会通过 GitHub Actions 自动发布到 npm（`.github/workflows/release.yml`），使用 npm trusted publishing，不需要保存任何 npm token，并自动附带 provenance 证明：
+Pushing a version tag publishes to npm through GitHub Actions (`.github/workflows/release.yml`), using npm trusted publishing: no npm token is stored, and a provenance attestation is attached automatically.
 
 ```sh
-npm version patch          # 或 minor / major；预发布用 npm version prerelease --preid beta
-git push --follow-tags     # 推送 v* tag 触发发布
+npm version patch          # or minor / major; for a prerelease: npm version prerelease --preid beta
+git push --follow-tags     # pushing the v* tag starts the release
 ```
 
-- tag 必须和 `package.json` 的版本一致，否则发布失败。
-- 带 `-` 的预发布版本（如 `v0.2.0-beta.1`）发布到 `next` 标签，不影响 `latest`。
-- 发布前会跑类型检查和单元测试；仓库设置了 `JEV_KEY` secret 时还会跑调用真实 API 的端到端测试（没设置时该步骤显示为 skipped）。
-- 发布成功后自动创建 GitHub Release。
+- The tag must match the version in `package.json`, or the release fails.
+- Prereleases (versions with a `-`, such as `v0.2.0-beta.1`) are published under the `next` dist-tag and leave `latest` alone.
+- The type check and unit tests run before publishing; with the `JEV_KEY` repository secret set, the real-API end-to-end tests run too (the step shows as skipped without it).
+- A GitHub release is created after a successful publish.
 
-每次推送到 `main` 和每个 PR 都会跑 CI（`.github/workflows/ci.yml`）：Node 22 / 24 下的类型检查、单元测试，以及 publint、arethetypeswrong 包检查。推送到 `main` 或在 Actions 页面手动运行时，还会用 `JEV_KEY` secret 跑调用真实 API 的端到端测试（PR 不跑，因为 fork 的 PR 拿不到 secret）。
+CI (`.github/workflows/ci.yml`) runs on every push to `main` and every pull request: the type check and unit tests on Node 22 and 24, and the publint and arethetypeswrong package checks. Pushes to `main` and manual runs from the Actions page also run the real-API end-to-end tests with the `JEV_KEY` secret (pull requests don't, since pull requests from forks don't get secrets).
 
 ## License
 
