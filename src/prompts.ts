@@ -336,3 +336,17 @@ export function summaryText(locale: Locale, score: number, differenceCount: numb
     ? `Similarity ${score}/10 (${label}); found ${differenceCount} difference${differenceCount > 1 ? "s" : ""}.`
     : `Similarity ${score}/10 (${label}); no notable differences found.`;
 }
+
+/** A fix suggestion for a moved element that says which way, and how far, it moved. */
+export function shiftSuggestion(locale: Locale, element: ElementType, shift: { x: number; y: number }): string {
+  const e = ELEMENT_LABELS[locale][element];
+  const parts: string[] = [];
+  if (locale === "zh") {
+    if (shift.x) parts.push(`偏${shift.x > 0 ? "右" : "左"} ${Math.abs(shift.x)}px`);
+    if (shift.y) parts.push(`偏${shift.y > 0 ? "下" : "上"} ${Math.abs(shift.y)}px`);
+    return `${e}比参考图中的位置${parts.join("、")}，请调整布局（margin / padding / 对齐方式）。`;
+  }
+  if (shift.x) parts.push(`${Math.abs(shift.x)}px too far ${shift.x > 0 ? "right" : "left"}`);
+  if (shift.y) parts.push(`${Math.abs(shift.y)}px too ${shift.y > 0 ? "low" : "high"}`);
+  return `The ${e} is ${parts.join(" and ")} compared with the reference; adjust margin, padding or alignment.`;
+}

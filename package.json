@@ -1,6 +1,6 @@
 {
   "name": "jev-compare",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "AI visual image comparison for UI review: a 1–10 similarity score, located differences with bounding boxes, and fix suggestions. Built on the TypeSafe AI (Jev) SDK.",
   "keywords": [
     "image",

@@ -9,6 +9,7 @@ import type {
   SystemOneResult,
   TypeSafeClientConfig,
 } from "@typesafe-ai/sdk";
+import { shiftFinder } from "./displacement.ts";
 import { loadImage } from "./image.ts";
 import type { ImageInput, LoadedImage } from "./image.ts";
 import { fileCache, requestCacheKey, sha256 } from "./cache.ts";
@@ -24,6 +25,7 @@ import {
   differenceSuggestion,
   elementLabel,
   EXTENT_SCORES,
+  shiftSuggestion,
   MAX_DIFFERENCES,
   overviewQuestions,
   refineQuestions,
@@ -32,6 +34,7 @@ import {
   typeLabel,
 } from "./prompts.ts";
 import type { DifferenceType, ElementType, Locale } from "./prompts.ts";
+import type { Shift } from "./displacement.ts";
 
 /** A box as fractions (0–1) of the image's width and height. */
 export interface NormalizedBox {
@@ -73,6 +76,12 @@ export interface Difference {
   /** Where the difference is in the reference image. */
   referenceBox: NormalizedBox;
   referenceBoxPx: PixelBox;
+  /**
+   * For a `moved` difference confirmed by matching pixels, how far the element sits in the
+   * candidate from its reference position, in candidate pixels (positive is right and down).
+   * `null` otherwise.
+   */
+  shift: { x: number; y: number } | null;
 }
 
 /** A kind of difference detected somewhere in the image, with no location. */
@@ -231,6 +240,8 @@ interface Finding {
   element: ChoiceResponse<Record<ElementType, string>>;
   box: BoxResponse;
   refbox: BoxResponse;
+  /** Set when matching pixels shows the region is the same content at another position. */
+  shift?: Shift;
 }
 
 /**
@@ -365,16 +376,36 @@ export async function compareImages(
     findings = dedupe(refined);
   }
 
+  // The model sees a shifted element as a gap plus an overlap and calls it missing or changed
+  // content; matching pixels tells whether the region is the same content somewhere else.
+  if (findings.length) {
+    const findShift = shiftFinder(ref, cand);
+    findings = findings.map((f) => {
+      const shift = findShift(normalize(f.box.box), normalize(f.refbox.box));
+      if (!shift) return f;
+      return {
+        ...f,
+        type: { ...f.type, choice: "moved", confidence: shift.confidence },
+        box: { ...f.box, box: shift.box },
+        refbox: { ...f.refbox, box: shift.referenceBox },
+        shift,
+      };
+    });
+  }
+
   const differences: Difference[] = findings.map((f, i) => {
     const box = normalize(f.box.box);
     const referenceBox = normalize(f.refbox.box);
+    const shift = f.shift ? { x: Math.round(f.shift.x * cand.width), y: Math.round(f.shift.y * cand.height) } : null;
     return {
       rank: i + 1,
       type: f.type.choice,
       typeLabel: typeLabel(locale, f.type.choice),
       element: f.element.choice,
       elementLabel: elementLabel(locale, f.element.choice),
-      suggestion: differenceSuggestion(locale, f.type.choice, f.element.choice),
+      suggestion: shift
+        ? shiftSuggestion(locale, f.element.choice, shift)
+        : differenceSuggestion(locale, f.type.choice, f.element.choice),
       probability: f.probability,
       typeConfidence: f.type.confidence,
       box,
@@ -382,6 +413,7 @@ export async function compareImages(
       boxConfidence: f.box.confidence,
       referenceBox,
       referenceBoxPx: toPixels(referenceBox, ref),
+      shift,
     };
   });
 

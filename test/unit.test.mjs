@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { BadRequestError } from "@typesafe-ai/sdk";
+import { decode, encode } from "fast-png";
 import { annotateDifferences, combineScore, compareImages, extentScore, ImageFormatError, iou, readImageInfo, toPixels } from "../dist/index.mjs";
 
 const ref = new URL("./original_img.png", import.meta.url).pathname;
@@ -158,6 +159,43 @@ test("a request over the token limit is split in half and retried", async () => 
   const asked = inner.calls.map((c) => Object.keys(c.questions).filter((n) => n.startsWith("exists_")).length);
   assert.deepEqual(asked.sort(), [0, 2, 2]);
   assert.equal(result.differences.length, 2);
+});
+
+/** `original_img.png` with the "Change Logo" button moved 30px left, its old place filled with the card's white. */
+async function movedButton() {
+  const png = decode(await readFile(ref));
+  const { width, channels } = png;
+  const data = new Uint8Array(png.data);
+  const at = (x, y) => (y * width + x) * channels;
+  const white = png.data.slice(at(220, 625), at(220, 625) + channels);
+  for (let y = 607; y < 645; y++) for (let x = 230; x < 340; x++) data.set(white, at(x, y));
+  for (let y = 607; y < 645; y++) for (let x = 230; x < 340; x++) data.set(png.data.subarray(at(x, y), at(x, y) + channels), at(x - 30, y));
+  return encode({ width, height: png.height, data, channels, depth: 8 });
+}
+
+test("a moved element is recognized by matching pixels, with how far it moved", async () => {
+  // The model sees the gap and calls it a color change, with boxes on the button's new place.
+  const client = fakeClient((name, q) => {
+    if (q.type === "choice") return { type: "choice", choice: name.startsWith("type") ? "color_changed" : "button", confidence: 0.3 };
+    if (name === "exists_0") return { type: "noul", noul: 0.8 };
+    if (name.startsWith("exists_")) return { type: "noul", noul: 0.1 };
+    if (q.type === "box") return { type: "box", box: { top: 0.74, bottom: 0.795, left: 0.52, right: 0.92 }, confidence: 0.6 };
+    return defaultAnswer(name, q);
+  });
+  const result = await compareImages(ref, await movedButton(), { client, locale: "en" });
+  assert.equal(result.differences.length, 1);
+  const [d] = result.differences;
+  assert.equal(d.type, "moved");
+  assert.deepEqual(d.shift, { x: -30, y: 0 });
+  assert.equal(d.referenceBoxPx.x - d.boxPx.x, 30, "the reference box is where the button was");
+  assert.match(d.suggestion, /30px too far left/);
+});
+
+test("missing content is not mistaken for a moved element", async () => {
+  // test_img1 lost the description text and the button label; nothing in it moved.
+  const client = fakeClient(defaultAnswer);
+  const result = await compareImages(ref, cand, { client, refine: false });
+  assert.ok(result.differences.every((d) => d.type !== "moved" && d.shift === null));
 });
 
 test("invalid options are rejected", async () => {

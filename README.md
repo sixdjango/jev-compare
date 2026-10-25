@@ -77,7 +77,8 @@ An image can be a file path, a `data:` URL, `{ base64 }`, a `Uint8Array` / `Buff
       "boxPx": { "x": 26, "y": 723, "width": 323, "height": 57 },          // candidate, pixels
       "boxConfidence": 0.74,
       "referenceBox": { /* the same region in the reference */ },
-      "referenceBoxPx": { /* ... */ }
+      "referenceBoxPx": { /* ... */ },
+      "shift": null                // for `moved`: how far the element moved, in candidate pixels, e.g. { "x": -30, "y": 0 }
     }
   ],
   "issues": [                      // kinds of difference found anywhere in the image (no location)
@@ -106,7 +107,7 @@ An image can be a file path, a `data:` URL, `{ base64 }`, a `Uint8Array` / `Buff
 | `element_extra` | An element that isn't in the reference |
 | `text_changed` | The text differs |
 | `color_changed` | A color differs |
-| `moved` | Position, alignment or spacing differs |
+| `moved` | Position, alignment or spacing differs. Each located difference is checked by matching pixels: when the region is the same content at another position, it is reported as `moved`, with `shift` set and `referenceBox` on the element's original place |
 | `resized` | Size differs |
 | `font_changed` | Font family, size or weight differs |
 | `icon_changed` | An icon or picture differs |

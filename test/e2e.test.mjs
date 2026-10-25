@@ -64,6 +64,20 @@ test("images over the API size limit are downscaled before upload", { skip }, as
   assert.ok(button.boxPx.y > 1400, `pixel box is in original coordinates: ${JSON.stringify(button.boxPx)}`);
 });
 
+test("a button moved 30px left is reported as moved", { skip }, async () => {
+  const png = decode(await readFile(file("original_img.png")));
+  const { width, channels } = png;
+  const data = new Uint8Array(png.data);
+  const at = (x, y) => (y * width + x) * channels;
+  const white = png.data.slice(at(220, 625), at(220, 625) + channels);
+  for (let y = 607; y < 645; y++) for (let x = 230; x < 340; x++) data.set(white, at(x, y));
+  for (let y = 607; y < 645; y++) for (let x = 230; x < 340; x++) data.set(png.data.subarray(at(x, y), at(x, y) + channels), at(x - 30, y));
+  const r = await compareImages(file("original_img.png"), encode({ width, height: png.height, data, channels, depth: 8 }));
+  const moved = r.differences.find((d) => d.type === "moved");
+  assert.ok(moved, JSON.stringify(r.differences.map((d) => d.type)));
+  assert.deepEqual(moved.shift, { x: -30, y: 0 });
+});
+
 test("a repeated comparison is served from the cache", { skip }, async () => {
   const { memoryCache } = await import("../dist/index.mjs");
   const cache = memoryCache();

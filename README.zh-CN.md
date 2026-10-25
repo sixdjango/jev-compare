@@ -77,7 +77,8 @@ await writeFile("diff.svg", await annotateDifferences("screenshot.png", result))
       "boxPx": { "x": 26, "y": 723, "width": 327, "height": 57 },          // 候选图，像素坐标
       "boxConfidence": 0.74,
       "referenceBox": { /* 参考图中的对应区域 */ },
-      "referenceBoxPx": { /* ... */ }
+      "referenceBoxPx": { /* ... */ },
+      "shift": null                // moved 类型时：元素的位移量（当前图像素），如 { "x": -30, "y": 0 }
     }
   ],
   "issues": [                      // 全图层面检测到的差异类型（无位置）
@@ -106,7 +107,7 @@ await writeFile("diff.svg", await annotateDifferences("screenshot.png", result))
 | `element_extra` | 多出了参考图中没有的元素 |
 | `text_changed` | 文字内容不一致 |
 | `color_changed` | 颜色不一致 |
-| `moved` | 位置 / 对齐 / 间距不一致 |
+| `moved` | 位置 / 对齐 / 间距不一致。每处差异都会做像素匹配：若该区域是同样的内容出现在别的位置，就判为 `moved`，并给出 `shift`，`referenceBox` 指向元素原来的位置 |
 | `resized` | 尺寸不一致 |
 | `font_changed` | 字体 / 字号 / 字重不一致 |
 | `icon_changed` | 图标 / 图片不一致 |

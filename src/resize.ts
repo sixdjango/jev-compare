@@ -45,7 +45,7 @@ export function prepareImage(img: LoadedImage, options: ResizeOptions = {}): Pre
   const size = targetSize(img.width, img.height, options);
   if (!size) return { bytes: img.bytes, width: img.width, height: img.height, resized: false };
 
-  const rgba = img.format === "png" ? decodePngToRgba(img.bytes) : decodeJpegToRgba(img.bytes);
+  const rgba = decodeRgba(img);
   const scaled = resizeRgba(rgba, img.width, img.height, size.width, size.height);
   const bytes =
     img.format === "png"
@@ -120,6 +120,11 @@ function coverage(srcLength: number, dstLength: number): Array<Array<[number, nu
     result.push(weights);
   }
   return result;
+}
+
+/** Decode a PNG or JPEG to 8-bit RGBA. */
+export function decodeRgba(img: LoadedImage): Uint8Array {
+  return img.format === "png" ? decodePngToRgba(img.bytes) : decodeJpegToRgba(img.bytes);
 }
 
 function decodeJpegToRgba(bytes: Uint8Array): Uint8Array {
