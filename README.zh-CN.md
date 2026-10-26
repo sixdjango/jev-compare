@@ -129,7 +129,7 @@ await writeFile("diff.svg", await annotateDifferences("screenshot.png", result))
 | `context` | – | 给模型的额外说明 |
 | `client` | – | 复用已有的 `TypeSafeClient`（需带图片 opt-in header，推荐用 `createClient()` 创建） |
 | `clientOptions` | – | 传给 `TypeSafeClient` 的配置，如 `baseURL`、`timeout`、自定义 `fetch` |
-| `proxy` | `HTTPS_PROXY` / `HTTP_PROXY` | HTTP 代理地址，`false` 关闭；遵守 `NO_PROXY`，见[代理](#代理) |
+| `proxy` | `HTTPS_PROXY` / `HTTP_PROXY` / `ALL_PROXY` | HTTP(S) 代理地址，`false` 关闭；遵守 `NO_PROXY`，见[代理](#代理) |
 | `signal` | – | `AbortSignal`，用于取消 |
 
 ## 命令行
@@ -296,7 +296,7 @@ UI 截图这类大块元素的差异，用较小的 `maxPixels` 通常就够了�
 
 ## 代理
 
-TypeSafe 在部分地区不可用（HTTP 451）。jev-compare 会自己读取 `HTTPS_PROXY` / `HTTP_PROXY`（大小写均可）并遵守 `NO_PROXY`，不需要 `NODE_USE_ENV_PROXY` 或 `--use-env-proxy`：
+TypeSafe 在部分地区不可用（HTTP 451）。jev-compare 会自己依次读取 `HTTPS_PROXY`、`HTTP_PROXY`、`ALL_PROXY`（均大小写均可）并遵守 `NO_PROXY`，不需要 `NODE_USE_ENV_PROXY` 或 `--use-env-proxy`。代理必须是 `http://` 或 `https://`；不带协议的地址按 `http://` 处理：
 
 ```sh
 # .env
@@ -311,7 +311,38 @@ await compareImages(a, b, { proxy: "http://127.0.0.1:7890" });
 await compareImages(a, b, { proxy: false });
 ```
 
-命令行用 `--proxy <url>`，`--proxy none` 关闭。传入 `client` 或 `clientOptions.fetch` 时不使用该选项。
+命令行用 `--proxy <url>`，`--proxy none` 关闭。传入 `client` 或 `clientOptions.fetch` 时不使用该选项。其他协议（如 `socks5://`）会抛出 `ProxyUrlError`；Clash 等客户端的混合端口（mixed-port）同时支持 HTTP，用该端口的 `http://` 地址即可。
+
+## 错误
+
+`summarizeError(error)` 把 `compareImages` 抛出的任何错误转成可以安全记录或上报的普通数据：API key（`JEV_KEY` / `TYPESAFE_API_KEY`）、代理的用户名和密码、`Bearer` / `Basic` 令牌以及 URL 中的 token 类参数都会替换成 `***`。
+
+```js
+import { compareImages, summarizeError } from "jev-compare";
+
+try {
+  await compareImages(a, b);
+} catch (error) {
+  console.error(summarizeError(error, { locale: "zh" }));
+}
+```
+
+```jsonc
+{
+  "kind": "proxy",                         // auth、permission、region、rate_limit、bad_request、server、api、
+                                           // timeout、proxy、network、aborted、invalid_input 或 unknown
+  "name": "APIConnectionError",
+  "message": "Connection error: fetch failed",
+  "code": "ECONNREFUSED",                  // cause 链中最具体的错误码
+  "proxy": "http://***@127.0.0.1:7890",    // 使用的代理，不含认证信息
+  "hint": "无法连接代理，请确认代理已启动且地址正确。",
+  "causes": [{ "name": "TypeError", "message": "fetch failed" }, { "name": "Error", "message": "connect ECONNREFUSED 127.0.0.1:7890", "code": "ECONNREFUSED" }]
+}
+```
+
+API 错误还带有 `status` 和 `requestId`，限流错误带有 `retryAfterMs`。连不上代理、代理拒绝请求或拒绝认证时为 `proxy`，与 `network`（连不上 API 本身）区分开。代理不是来自环境变量时，传入与 `compareImages` 相同的 `proxy`；`secrets` 可追加需要脱敏的字符串；`locale` 决定 `hint` 的语言（默认 `"en"`）。
+
+命令行出错时会打印这份摘要；加 `--json` 时向 stdout 输出 `{ "error": { ... } }`。两种情况退出码都是 1。
 
 ## 原理
 

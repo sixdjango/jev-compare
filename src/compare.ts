@@ -193,9 +193,9 @@ export interface CompareOptions {
   /** Options for the created client, such as `baseURL`, `timeout` or a custom `fetch`. */
   clientOptions?: TypeSafeClientConfig;
   /**
-   * HTTP proxy for API requests, such as `http://127.0.0.1:7890`, or `false` for none.
-   * Default: `HTTPS_PROXY`, then `HTTP_PROXY`; `NO_PROXY` is honored. Ignored when
-   * `client` or `clientOptions.fetch` is given.
+   * Proxy for API requests, such as `http://127.0.0.1:7890` (HTTP or HTTPS only),
+   * or `false` for none. Default: `HTTPS_PROXY`, then `HTTP_PROXY`, then `ALL_PROXY` (either case);
+   * `NO_PROXY` is honored. Ignored when `client` or `clientOptions.fetch` is given.
    */
   proxy?: string | false;
   /**

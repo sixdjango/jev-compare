@@ -1,7 +1,16 @@
 import { writeFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
-import { annotateDifferences, compareImages, fileCache, listReports, pruneReports } from "./index.ts";
-import type { CachePruneResult, FileCacheOptions, Locale, PruneResult, ReportFormat, RetentionPolicy } from "./index.ts";
+import { annotateDifferences, compareImages, fileCache, listReports, pruneReports, summarizeError } from "./index.ts";
+import type {
+  CachePruneResult,
+  ErrorSummary,
+  FileCacheOptions,
+  Locale,
+  PruneResult,
+  ReportFormat,
+  RetentionPolicy,
+  SummarizeErrorOptions,
+} from "./index.ts";
 
 const USAGE = `Usage: jev-compare <reference> <candidate> [options]
        jev-compare --list <dir>
@@ -36,11 +45,16 @@ Options:
   --no-resize            Send the original images (the API rejects sides over 1568 px)
   --context <text>       Extra context for the model
   --model <name>         Model name (default: jev-preview)
-  --proxy <url|none>     HTTP proxy (default: HTTPS_PROXY / HTTP_PROXY; "none" disables)
+  --proxy <url|none>     HTTP(S) proxy (default: HTTPS_PROXY / HTTP_PROXY / ALL_PROXY; "none" disables)
   -h, --help             Show this help
 
 The API key is read from JEV_KEY or TYPESAFE_API_KEY.
-HTTPS_PROXY / HTTP_PROXY are used automatically, honoring NO_PROXY.`;
+HTTPS_PROXY / HTTP_PROXY / ALL_PROXY (either case) are used automatically, honoring NO_PROXY.
+On failure, errors are summarized with API keys and proxy credentials redacted; with --json
+the summary is printed as {"error": {...}}.`;
+
+/** How a failure is reported: set once the arguments are parsed. */
+let errorOutput: { json: boolean } & SummarizeErrorOptions = { json: false };
 
 async function main(): Promise<void> {
   const { values, positionals } = parseArgs({
@@ -75,6 +89,11 @@ async function main(): Promise<void> {
       help: { type: "boolean", short: "h" },
     },
   });
+  errorOutput = {
+    json: values.json ?? false,
+    locale: values.locale === "en" ? "en" : "zh",
+    proxy: proxyFlag(values.proxy),
+  };
   if (values.list !== undefined) {
     const reports = await listReports(values.list);
     if (values.json) {
@@ -124,7 +143,7 @@ async function main(): Promise<void> {
         },
     context: values.context,
     model: values.model,
-    proxy: values.proxy === undefined ? undefined : values.proxy === "none" ? false : values.proxy,
+    proxy: proxyFlag(values.proxy),
     cache: values.cache === undefined ? undefined : fileCache({ dir: values.cache, ...cacheLimits }),
     report:
       values.report === undefined
@@ -237,7 +256,29 @@ function parseMeta(pairs: string[]): Record<string, string> {
   return meta;
 }
 
+function proxyFlag(raw: string | undefined): string | false | undefined {
+  return raw === undefined ? undefined : raw === "none" ? false : raw;
+}
+
+function printError(e: ErrorSummary): void {
+  console.error(e.message);
+  const deepest = e.causes.at(-1);
+  const details: Array<[string, string | number | undefined]> = [
+    ["kind", e.kind === "invalid_input" || e.kind === "unknown" ? undefined : e.kind],
+    ["status", e.status],
+    ["code", e.code],
+    ["request", e.requestId],
+    ["proxy", e.proxy],
+    ["cause", deepest && deepest.message !== e.message ? deepest.message : undefined],
+    ["hint", e.hint],
+  ];
+  for (const [label, value] of details) if (value !== undefined) console.error(`  ${label}: ${value}`);
+}
+
 main().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : error);
+  const { json, ...options } = errorOutput;
+  const summary = summarizeError(error, options);
+  if (json) console.log(JSON.stringify({ error: summary }, null, 2));
+  else printError(summary);
   process.exitCode = 1;
 });

@@ -129,7 +129,7 @@ An image can be a file path, a `data:` URL, `{ base64 }`, a `Uint8Array` / `Buff
 | `context` | – | Extra context for the model |
 | `client` | – | An existing `TypeSafeClient` to reuse (it must send the image opt-in header; create it with `createClient()`) |
 | `clientOptions` | – | Options for the created `TypeSafeClient`, such as `baseURL`, `timeout` or a custom `fetch` |
-| `proxy` | `HTTPS_PROXY` / `HTTP_PROXY` | HTTP proxy URL, or `false` for none; honors `NO_PROXY`. See [Proxies](#proxies) |
+| `proxy` | `HTTPS_PROXY` / `HTTP_PROXY` / `ALL_PROXY` | HTTP(S) proxy URL, or `false` for none; honors `NO_PROXY`. See [Proxies](#proxies) |
 | `signal` | – | An `AbortSignal` to cancel |
 
 ## Command line
@@ -297,7 +297,7 @@ Decoding and encoding are pure JavaScript ([fast-png](https://github.com/image-j
 
 ## Proxies
 
-TypeSafe isn't available in some regions (HTTP 451). jev-compare reads `HTTPS_PROXY` / `HTTP_PROXY` (either case) itself and honors `NO_PROXY`; `NODE_USE_ENV_PROXY` and `--use-env-proxy` aren't needed:
+TypeSafe isn't available in some regions (HTTP 451). jev-compare reads `HTTPS_PROXY`, then `HTTP_PROXY`, then `ALL_PROXY` (each in either case) itself and honors `NO_PROXY`; `NODE_USE_ENV_PROXY` and `--use-env-proxy` aren't needed. Proxies must be `http://` or `https://`; a URL with no scheme is taken as `http://`:
 
 ```sh
 # .env
@@ -312,7 +312,38 @@ await compareImages(a, b, { proxy: "http://127.0.0.1:7890" });
 await compareImages(a, b, { proxy: false });
 ```
 
-On the command line, use `--proxy <url>`, or `--proxy none` to turn it off. The option is ignored when `client` or `clientOptions.fetch` is given.
+On the command line, use `--proxy <url>`, or `--proxy none` to turn it off. The option is ignored when `client` or `clientOptions.fetch` is given. Other schemes, such as `socks5://`, throw a `ProxyUrlError`; the mixed port of clients like Clash speaks HTTP too, so use `http://` with that port.
+
+## Errors
+
+`summarizeError(error)` turns anything `compareImages` throws into plain data that is safe to log or send to an error tracker: the API key (`JEV_KEY` / `TYPESAFE_API_KEY`), proxy user names and passwords, `Bearer` / `Basic` tokens and token query parameters are replaced with `***`.
+
+```js
+import { compareImages, summarizeError } from "jev-compare";
+
+try {
+  await compareImages(a, b);
+} catch (error) {
+  console.error(summarizeError(error, { locale: "en" }));
+}
+```
+
+```jsonc
+{
+  "kind": "proxy",                         // auth, permission, region, rate_limit, bad_request, server, api,
+                                           // timeout, proxy, network, aborted, invalid_input or unknown
+  "name": "APIConnectionError",
+  "message": "Connection error: fetch failed",
+  "code": "ECONNREFUSED",                  // the most specific code in the cause chain
+  "proxy": "http://***@127.0.0.1:7890",    // the proxy in use, without credentials
+  "hint": "Can't reach the proxy; check that it's running and the address is right.",
+  "causes": [{ "name": "TypeError", "message": "fetch failed" }, { "name": "Error", "message": "connect ECONNREFUSED 127.0.0.1:7890", "code": "ECONNREFUSED" }]
+}
+```
+
+API errors also have `status` and `requestId`, and rate limits `retryAfterMs`. A failure to reach the proxy, or the proxy refusing the request or the credentials, is `proxy`, told apart from `network` (the API itself can't be reached). Pass the same `proxy` as to `compareImages` when it isn't the environment's, `secrets` to redact more strings, and `locale` (`"en"` by default) for the hint's language.
+
+The CLI prints this summary on failure; with `--json` it prints `{ "error": { ... } }` to stdout. Either way it exits with code 1.
 
 ## How it works
 
